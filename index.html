@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Garage Finder</title>
+<style>
+  body {
+    margin: 0;
+    font-family: "Segoe UI", sans-serif;
+    background: transparent;
+    color: white;
+  }
+
+  /* Small garage icon button in the bottom-left corner, sits above any other button */
+  #garageBtn {
+    position: fixed;
+    bottom: 60px; /* sits above the existing bottom-left button */
+    left: 20px;
+    width: 32px;
+    height: 32px;
+    cursor: pointer;
+    z-index: 9999;
+  }
+
+  #garageBtn:hover {
+    transform: scale(1.2);
+    transition: transform 0.1s ease-in-out;
+  }
+</style>
+</head>
+<body>
+
+<!-- Garage button -->
+<img id="garageBtn" src="garage.png" alt="Set Nearest Garage">
+
+<script>
+  // Garage locations
+  const garageLocations = [
+    { name: "Legion Square Garage", x: 215.124, y: -810.290 },
+    { name: "Rockford Hills Garage", x: -339.483, y: -136.928 },
+    { name: "Del Perro Garage", x: -1173.559, y: -891.226 },
+    { name: "Sandy Shores Garage", x: 598.773, y: 2740.143 },
+    { name: "Grapeseed Garage", x: 1737.290, y: 3709.654 },
+    { name: "La Mesa Garage", x: -73.44, y: -2004.12 },
+    { name: "Vespucci Garage", x: -1457.33, y: -503.24 },
+    { name: "Mirror Park Garage", x: 1137.21, y: -776.93 },
+    { name: "Downtown Vinewood Garage", x: -67.97, y: 65.48 },
+    { name: "Harmony Garage", x: 2775.92, y: 3481.43 }
+  ];
+
+  let playerPos = { x: 0, y: 0 };
+  let firstPositionReceived = false;
+
+  // Listen for in-game player position updates
+  window.addEventListener("message", (event) => {
+    const data = event.data.data || event.data || {};
+    if (data.pos_x !== undefined) playerPos.x = data.pos_x;
+    if (data.pos_y !== undefined) playerPos.y = data.pos_y;
+
+    // Notify when position is first received
+    if (!firstPositionReceived && data.pos_x !== undefined && data.pos_y !== undefined) {
+      firstPositionReceived = true;
+      window.parent.postMessage({ 
+        type: "notification", 
+        text: "✅ Player position received successfully." 
+      }, "*");
+    }
+  });
+
+  // Calculate nearest garage
+  function getNearestGarage() {
+    let nearest = null;
+    let minDist = Infinity;
+    for (let loc of garageLocations) {
+      const dx = loc.x - playerPos.x;
+      const dy = loc.y - playerPos.y;
+      const dist = Math.sqrt(dx*dx + dy*dy);
+      if (dist < minDist) {
+        minDist = dist;
+        nearest = loc;
+      }
+    }
+    return nearest;
+  }
+
+  // Send waypoint to game
+  function setWaypoint(x, y, name) {
+    window.parent.postMessage({ type: "setWaypoint", x, y }, "*");
+    window.parent.postMessage({ type: "notification", text: `Waypoint set to ${name}` }, "*");
+  }
+
+  // Button click
+  const btn = document.getElementById("garageBtn");
+  btn.addEventListener("click", () => {
+    const nearest = getNearestGarage();
+    if (nearest) setWaypoint(nearest.x, nearest.y, nearest.name);
+  });
+
+  // Register keybind for FiveM Keybinds menu
+  window.parent.postMessage({
+    type: "registerTrigger",
+    trigger: "garage_nearest",
+    name: "Set Nearest Garage"
+  }, "*");
+
+  // Listen for keybind trigger
+  window.addEventListener("message", (event) => {
+    const evt = event.data;
+    if (evt.data) {
+      for (const key in evt.data) {
+        if (key === "trigger_garage_nearest") {
+          const nearest = getNearestGarage();
+          if (nearest) setWaypoint(nearest.x, nearest.y, nearest.name);
+        }
+      }
+    }
+  });
+
+  // Drag functionality
+  let isDragging = false, offsetX, offsetY;
+  btn.addEventListener("mousedown", e => {
+    isDragging = true;
+    offsetX = e.clientX - btn.offsetLeft;
+    offsetY = e.clientY - btn.offsetTop;
+    btn.style.cursor = "grabbing";
+  });
+  document.addEventListener("mousemove", e => {
+    if (isDragging) {
+      btn.style.left = (e.clientX - offsetX) + "px";
+      btn.style.top = (e.clientY - offsetY) + "px";
+    }
+  });
+  document.addEventListener("mouseup", () => {
+    isDragging = false;
+    btn.style.cursor = "pointer";
+  });
+
+  // Pin web app on Escape
+  window.addEventListener('keydown', (e) => {
+    if (e.key === "Escape") {
+      window.parent.postMessage({type: "pin"}, "*");
+    }
+  });
+
+  // Force request player position immediately on load
+  window.parent.postMessage({ type: "getData" }, "*");
+</script>
+</body>
+</html>
